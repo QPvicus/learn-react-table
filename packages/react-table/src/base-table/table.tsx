@@ -1,7 +1,7 @@
 /*
  * @Author: Taylor Swift
  * @Date: 2021-06-13 21:17:56
- * @LastEditTime: 2021-06-26 21:09:28
+ * @LastEditTime: 2021-06-26 21:31:06
  * @Description:
  */
 
@@ -158,7 +158,7 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
   }
   private renderTableBody(info: RenderInfo) {
     const { dataSource, components, isLoading, emptyCellHeight, footerDataSource, getRowProps, primaryKey } = this.props
-    const tableBodyClassName = cx(Classes.tableBody, {
+    const tableBodyClassName = cx(Classes.tableBody, Classes.horizontalScrollContainer, {
       'no-scroll': footerDataSource.length > 0,
     })
     if (dataSource.length === 0) {
@@ -177,7 +177,9 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
     const { topIndex, topBlank, bottomBlank, bottomIndex } = info.verticalRenderRange
     return (
       <div className={tableBodyClassName}>
-        {topBlank > 0 && <div key="top-blank" className={cx(Classes.virtualBlank)} style={{ height: topBlank }}></div>}
+        {topBlank > 0 && (
+          <div key="top-blank" className={cx(Classes.virtualBlank, 'top')} style={{ height: topBlank }}></div>
+        )}
         <HtmlTable
           tbodyHtmlTag="tbody"
           getRowProps={getRowProps}
@@ -191,13 +193,14 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
             last: dataSource.length - 1,
           }}
         />
+        {bottomBlank > 0 && <div className={cx(Classes.virtualBlank, 'bottom')} style={{ height: bottomBlank }}></div>}
       </div>
     )
   }
   private renderTableFooter(info: RenderInfo) {
-    const { footerDataSource, primaryKey, getRowProps } = this.props
+    const { footerDataSource, primaryKey, getRowProps, stickyBottom } = this.props
     return (
-      <>
+      <div className={cx(Classes.tableFooter)} style={{ bottom: stickyBottom === 0 ? undefined : stickyBottom }}>
         <HtmlTable
           tbodyHtmlTag="tfoot"
           data={footerDataSource}
@@ -211,7 +214,7 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
             limit: Infinity,
           }}
         />
-      </>
+      </div>
     )
   }
 
