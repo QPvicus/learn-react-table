@@ -1,15 +1,15 @@
 /*
  * @Author: Taylor Swift
  * @Date: 2021-06-13 21:17:56
- * @LastEditTime: 2021-06-26 21:31:06
+ * @LastEditTime: 2021-07-01 17:43:08
  * @Description:
  */
 
 import React from 'react'
 import { CSSProperties } from 'react'
 import cx from 'classnames'
-import { noop, Subscription } from 'rxjs'
-import { Classes, StyledArtTableWrapper } from './style'
+import { BehaviorSubject, noop, Subscription } from 'rxjs'
+import { Classes, LOCK_SHADOW_PADDING, StyledArtTableWrapper } from './style'
 import Loading, { LoadingContentWrapperProps } from './loading'
 import { TableDOMHelper } from './helper/TableDOMUtils'
 import TableHeader from './header'
@@ -20,6 +20,7 @@ import { ArtColumn, VirtualEnum } from '../interfaces'
 import { calculationRenderInfo } from './calculations'
 import { RenderInfo, ResolvedUseVirtual } from './interfaces'
 import { getFullRenderRange } from './helper/rowHeightManager'
+import { getScrollbarSize, OVERSCAN_SIZE, sum, syncScrollLeft, throttledWindowResize$ } from './utils'
 export type PrimaryKey = string | ((record: any) => string)
 
 export interface BaseTableProps {
@@ -116,8 +117,9 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
   private artTableWrapperRef = React.createRef<HTMLDivElement>()
 
   private domHelper: TableDOMHelper
+  private props$: BehaviorSubject<BaseTableProps>
   // 最近一次渲染的计算结果缓存
-  private lastInfo: any
+  private lastInfo: RenderInfo
   private rootSubscription = new Subscription()
   constructor(props: Readonly<BaseTableProps>) {
     super(props)
@@ -129,6 +131,73 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
       offsetY: 0,
       maxRenderHeight: 600,
       maxRenderWidth: 800,
+    }
+  }
+
+  /**  自定义滚动条为table宽度 使滚动条滑块宽度相同  */
+  private updateStickyScroll() {
+    const { stickyScroll, stickyScrollItem, artTable } = this.domHelper
+    if (!artTable) {
+      return
+    }
+    const tableBodyHtmlTable = this.domHelper.getTableBodyHtmlTable()
+    const innerTableWidth = tableBodyHtmlTable.offsetWidth
+    const artTableWidth = artTable.offsetWidth
+
+    const stickyScrollHeightProp = this.props.stickyScrollHeight
+    const stickScrollHeight = stickyScrollHeightProp === 'auto' ? getScrollbarSize().height : stickyScrollHeightProp
+    stickyScroll.style.marginTop = `${-stickScrollHeight + 1}px`
+
+    if (artTableWidth >= innerTableWidth) {
+      if (this.state.hasScroll) {
+        this.setState({ hasScroll: false })
+      }
+    } else {
+      //  考虑下mac下面隐藏滚动条的情况
+      if (!this.state.hasScroll && stickScrollHeight < 5) {
+        this.setState({ hasScroll: true })
+      }
+    }
+
+    // 设置 子节点宽度
+    stickyScrollItem.style.width = `${innerTableWidth}px`
+  }
+
+  private updateScrollX(nextOffsetX: number) {
+    if (this.lastInfo.useVirtual.horizontal) {
+      if (Math.abs(nextOffsetX - this.state.offsetX) >= OVERSCAN_SIZE / 2) {
+        this.setState({
+          offsetX: nextOffsetX,
+        })
+      }
+    }
+  }
+
+  /** 同步横向滚东偏移量  */
+  private syncHorizontalScroll(x: number) {
+    this.updateScrollX(x)
+
+    const { tableBody } = this.domHelper
+    const { flat } = this.lastInfo
+    const leftLockShadow = this.domHelper.getLeftLockShadow()
+    if (leftLockShadow) {
+      const shouldShowLeftShadow = flat.left.length > 0 && this.state.needRenderLock && x > 0
+      if (shouldShowLeftShadow) {
+        leftLockShadow.classList.add('show-shadow')
+      } else {
+        leftLockShadow.classList.remove('show-shadow')
+      }
+    }
+
+    const rightLockShadow = this.domHelper.getRightLockShadow()
+    if (rightLockShadow) {
+      const shouldShowRightShadow =
+        flat.right.length > 0 && this.state.needRenderLock && x < tableBody.scrollWidth - tableBody.clientWidth
+      if (shouldShowRightShadow) {
+        rightLockShadow.classList.add('show-shadow')
+      } else {
+        rightLockShadow.classList.remove('show-shadow')
+      }
     }
   }
 
@@ -217,11 +286,46 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
       </div>
     )
   }
+  private renderLockShadows(info: RenderInfo) {
+    return (
+      <>
+        <div
+          className={Classes.lockShadowMask}
+          style={{ left: 0, width: info.leftLockTotalWidth + LOCK_SHADOW_PADDING }}
+        >
+          <div className={cx(Classes.lockShadow, Classes.leftLockShadow)}></div>
+        </div>
+        <div
+          className={Classes.lockShadowMask}
+          style={{ right: 0, width: info.rightLockTotalWidth + LOCK_SHADOW_PADDING }}
+        >
+          <div className={cx(Classes.lockShadow, Classes.rightLockShadow)}></div>
+        </div>
+      </>
+    )
+  }
+
+  private renderStickyScroll(info: RenderInfo) {
+    const { hasStickyScroll, stickyBottom } = this.props
+    const { hasScroll } = this.state
+    return (
+      <div
+        className={cx(Classes.stickyScroll, Classes.horizontalScrollContainer)}
+        style={{
+          display: hasStickyScroll && hasScroll ? 'block' : 'none',
+          bottom: stickyBottom,
+        }}
+      >
+        <div className={Classes.stickyScrollItem}></div>
+      </div>
+    )
+  }
 
   render() {
     const info = calculationRenderInfo(this)
-    this.lastInfo = info
     console.log(info)
+    this.lastInfo = info
+    console.log(this, 'this')
     const {
       useOuterBorder,
       dataSource,
@@ -262,7 +366,9 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
             {this.renderTableHeader(info)}
             {this.renderTableBody(info)}
             {this.renderTableFooter(info)}
+            {this.renderLockShadows(info)}
           </div>
+          {this.renderStickyScroll(info)}
         </Loading>
       </StyledArtTableWrapper>
     )
@@ -270,10 +376,38 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
 
   componentDidMount() {
     this.updateDOMHelper()
+    this.props$ = new BehaviorSubject(this.props)
     this.initSubscriptions()
+    this.disMountOrUpdate()
   }
 
-  private initSubscriptions() {}
+  componentDidUpdate(prevProps: Readonly<BaseTableProps>, prevState: Readonly<BaseTableState>) {
+    this.props$.next(this.props)
+    this.disMountOrUpdate(prevProps, prevState)
+  }
+
+  private disMountOrUpdate(prevProps?: Readonly<BaseTableProps>, prevState?: Readonly<BaseTableState>) {
+    this.updateStickyScroll()
+    this.adjustNeedRenderLock()
+  }
+
+  private initSubscriptions() {
+    const { tableHeader, tableBody, tableFooter, stickyScroll } = this.domHelper
+    this.rootSubscription.add(
+      throttledWindowResize$.subscribe(() => {
+        this.updateStickyScroll()
+        this.adjustNeedRenderLock()
+      }),
+    )
+
+    // 滚动同步
+    this.rootSubscription.add(
+      syncScrollLeft([tableHeader, tableBody, tableFooter, stickyScroll], (scrollLeft) => {
+        this.syncHorizontalScroll(scrollLeft)
+      }),
+    )
+  }
+
   /** 更新 DOM 节点的引用，方便其他方法直接操作 DOM */
   private updateDOMHelper() {
     this.domHelper = new TableDOMHelper(this.artTableWrapperRef.current)
@@ -282,6 +416,25 @@ export class BaseTable extends React.Component<BaseTableProps, BaseTableState> {
   componentWillUnmount() {
     this.rootSubscription.unsubscribe()
   }
-}
 
-export {}
+  /** 计算表格所有列的渲染宽度之和，判断表格是否需要渲染锁列 */
+  private adjustNeedRenderLock() {
+    const { needRenderLock } = this.state
+    const { flat, hasLockColumn } = this.lastInfo
+    if (hasLockColumn) {
+      const sumOfColWidth = sum(flat.full.map((col) => col.width))
+      const nextNeedRenderLock = sumOfColWidth > this.domHelper.artTable.clientWidth
+      if (needRenderLock !== nextNeedRenderLock) {
+        this.setState({
+          needRenderLock: nextNeedRenderLock,
+        })
+      }
+    } else {
+      if (needRenderLock) {
+        this.setState({
+          needRenderLock: false,
+        })
+      }
+    }
+  }
+}

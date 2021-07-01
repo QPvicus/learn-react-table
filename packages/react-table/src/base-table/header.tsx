@@ -1,7 +1,7 @@
 /*
  * @Author: Taylor Swift
  * @Date: 2021-06-16 11:32:01
- * @LastEditTime: 2021-06-30 20:54:44
+ * @LastEditTime: 2021-07-01 14:51:03
  * @Description:
  */
 
@@ -93,7 +93,6 @@ function attachColIndex(inputNested: ArtColumn[], colIndexOffset: number) {
 
 /** 根据nested 列配置 算出相应的leveled & flat 配置方便渲染 */
 function calculateLeveledAndFlat(nested: IndexedCol[], rowCount: number) {
-  console.log(nested, rowCount)
   const leveled: ColWidthRenderInfo[][] = []
   for (let depth = 0; depth < rowCount; depth++) {
     leveled.push([])
@@ -148,12 +147,8 @@ function calculateHeaderRenderInfo(
   flat: ColWidthRenderInfo[]
   leveled: ColWidthRenderInfo[][]
 } {
-  console.log('nested header', nested)
-  console.log(hoz)
   if (useVirtual.header) {
     // 开启 虚拟滚动
-    console.log(nested)
-    console.log(attachColIndex(nested.left, 0), 'header attachIndex')
     const leftPart = calculateLeveledAndFlat(attachColIndex(nested.left, 0), rowCount)
     const filtered = filterNestedCenter(nested.center, hoz, flat.left.length)
     const centerPart = calculateLeveledAndFlat(filtered, rowCount)
@@ -179,7 +174,6 @@ function calculateHeaderRenderInfo(
       ]),
     }
   }
-  console.log(calculateLeveledAndFlat(attachColIndex(nested.full, 0), rowCount))
   return calculateLeveledAndFlat(attachColIndex(nested.full, 0), rowCount)
 }
 
@@ -190,7 +184,6 @@ export default function TableHeader({ info }: { info: RenderInfo }) {
   const fullFlatCount = flat.full.length
   const leftFlatCount = flat.left.length
   const rightFlatCount = flat.right.length
-  console.log(fullFlatCount, leftFlatCount, rightFlatCount, 'count')
   const thead = headerRenderInfo.leveled.map((wrappedCols, level) => {
     const headerCells = wrappedCols.map((wrapped) => {
       if (wrapped.type === 'normal') {

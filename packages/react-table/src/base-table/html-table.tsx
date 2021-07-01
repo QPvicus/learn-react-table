@@ -44,9 +44,6 @@ export function HtmlTable({
   const fullFlatCount = flat.full.length
   const leftFlatCount = flat.left.length
   const rightFlatCount = flat.right.length
-  console.log(verInfo, 'verInfo')
-  console.log(hozInfo, 'hozInfo')
-  console.log(data)
   return (
     <table>
       <Colgroup descriptors={hozInfo.visible} />
@@ -116,7 +113,6 @@ export function HtmlTable({
 
     rowSpan = Math.min(rowSpan, verInfo.limit - rowIndex)
     colSpan = Math.min(colSpan, leftFlatCount + hoz.rightIndex - colIndex)
-    // console.log('colSpan', colSpan)
 
     const hasSpan = colSpan > 1 || colSpan > 1
     spanManager.add(rowIndex, colIndex, colSpan, rowSpan)

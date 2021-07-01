@@ -1,13 +1,14 @@
 /*
  * @Author: Taylor Swift
  * @Date: 2021-06-26 18:21:48
- * @LastEditTime: 2021-06-26 20:12:01
+ * @LastEditTime: 2021-07-01 17:53:50
  * @Description:
  */
 
 import { useEffect, useState } from 'react'
 import { getNCov2019Data } from './cdn-data'
 import _ from 'lodash'
+import { amount, time } from './format'
 
 interface ProvinceItem {
   provinceName: string
@@ -52,3 +53,22 @@ export function useProvinceDataSource() {
   }, [])
   return { dataSource, isLoading }
 }
+
+const rawCols = {
+  provinceName: { code: 'provinceName', name: '省份', width: 150 },
+  cityName: { code: 'cityName', name: '城市', width: 150 },
+  confirmedCount: { code: 'confirmedCount', name: '确诊', width: 100, render: amount, align: 'right' },
+  suspectedCount: { code: 'suspectedCount', name: '疑似', width: 100, render: amount, align: 'right' },
+  curedCount: { code: 'curedCount', name: '治愈', width: 100, render: amount, align: 'right' },
+  deadCount: { code: 'deadCount', name: '死亡', width: 100, render: amount, align: 'right' },
+  updateTime: { code: 'updateTime', name: '最后更新时间', width: 180, render: time },
+} as const
+
+const lockProvCol = { lock: true, ...rawCols.provinceName }
+const lockCityCol = { lock: true, ...rawCols.cityName }
+const lockTimeCol = { lock: true, ...rawCols.updateTime }
+const indCols = [rawCols.confirmedCount, rawCols.curedCount, rawCols.deadCount]
+
+export const cols = { ...rawCols, indCols, lockProvCol, lockCityCol, lockTimeCol }
+
+export const testProvColumns = [cols.provinceName, ...cols.indCols, cols.updateTime]
